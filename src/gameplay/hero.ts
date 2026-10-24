@@ -23,6 +23,7 @@ export type HeroIntent = 'chase' | 'charge' | 'retreat';
 export interface HeroHooks {
   hitMonster(slot: number, damage: number, crit: boolean): void;
   onQi(fromX: number, fromY: number, dirX: number, dirY: number): void;
+  onWhirl(x: number, y: number, radius: number, windup: number): void;
   onSwing(): void;
   onLevelUp(level: number, passive: string): void;
   onHurt(amount: number): void;
@@ -85,6 +86,12 @@ export class Hero {
   public qiDirX = 0;
   public qiDirY = 1;
 
+  /** 旋风斩：起手时锁死圆心，前摇期间他还在动，实时坐标会让预警和判定对不上。 */
+  public whirlCd: number = AI.whirlCd * 0.5;
+  public whirlWindup = 0;
+  public whirlX = 0;
+  public whirlY = 0;
+
   public flash = 0;
   public hurtTimer = 0;
   public retreatLock = 0;
@@ -146,6 +153,8 @@ export class Hero {
     this.recover = 0;
     this.qiCd = AI.qiCd * 0.5;
     this.qiWindup = 0;
+    this.whirlCd = AI.whirlCd * 0.5;
+    this.whirlWindup = 0;
     this.flash = 0;
     this.hurtTimer = 0;
     this.retreatLock = 0;
@@ -221,6 +230,7 @@ export class Hero {
     this.attackTimer = Math.max(0, this.attackTimer - dt);
     this.recover = Math.max(0, this.recover - dt);
     this.qiCd = Math.max(0, this.qiCd - dt);
+    this.whirlCd = Math.max(0, this.whirlCd - dt);
 
     if (this.slowTimer > 0) {
       this.slowTimer = Math.max(0, this.slowTimer - dt);
@@ -377,7 +387,7 @@ export class Hero {
     }
 
     this.state = 'engage';
-    this.intent = this.windup > 0 || this.qiWindup > 0 ? 'charge' : 'chase';
+    this.intent = this.windup > 0 || this.qiWindup > 0 || this.whirlWindup > 0 ? 'charge' : 'chase';
   }
 
   /** ---- 攻击与剑气 ---- */
@@ -385,6 +395,12 @@ export class Hero {
     if (this.frozenTimer > 0) {
       this.windup = 0;
       this.qiWindup = 0;
+      this.whirlWindup = 0;
+      return;
+    }
+    if (this.whirlWindup > 0) {
+      this.whirlWindup -= dt;
+      if (this.whirlWindup <= 0) this.resolveWhirl(store, hooks);
       return;
     }
     if (this.qiWindup > 0) {
@@ -400,6 +416,18 @@ export class Hero {
     }
 
     if (this.target < 0 || this.state === 'retreat') return;
+
+    // 旋风斩优先于剑气：贴脸被围是更危险的局面，先解围再谈输出。
+    // 门槛（≥3 个贴身）比剑气高，所以它不会抢走剑气该处理的直线排队场景。
+    if (this.whirlCd <= 0 && this.countWhirlTargets(store) >= AI.whirlMinTargets) {
+      this.whirlX = this.x;
+      this.whirlY = this.y;
+      this.whirlWindup = AI.whirlWindup;
+      this.whirlCd = AI.whirlCd;
+      this.intent = 'charge';
+      hooks.onWhirl(this.whirlX, this.whirlY, AI.whirlRadius, AI.whirlWindup);
+      return;
+    }
 
     // 剑气：能串到 ≥2 个目标时才放，避免浪费
     if (this.qiCd <= 0 && this.countQiTargets(store) >= AI.qiMinTargets) {
@@ -453,8 +481,47 @@ export class Hero {
     }
   }
 
-  private countQiTargets(store: MonsterStore): number {
-    if (this.target < 0) return 0;
+  /** 贴身（旋风半径内）的目标数。用来判断"是不是被围住了"。 */
+  private countWhirlTargets(store: MonsterStore): number {
+    let count = 0;
+    for (let i = 0; i < store.activeCount; i += 1) {
+      const slot = store.active[i];
+      if (slot === undefined) continue;
+      const r = store.radius[slot] ?? 0;
+      if (distance(this.x, this.y, store.x[slot] ?? 0, store.y[slot] ?? 0) <= AI.whirlRadius + r) {
+        count += 1;
+        if (count >= AI.whirlMinTargets) return count;
+      }
+    }
+    return count;
+  }
+
+  /**
+   * 旋风斩结算：以**起手时锁定的圆心**做无死角判定。
+   *
+   * 用锁定的圆心而不是实时坐标，是因为前摇期间他还在移动；
+   * 用实时坐标会出现"预警圈画在 A、实际打到 B"，玩家照着躲反而挨打。
+   */
+  private resolveWhirl(store: MonsterStore, hooks: HeroHooks): void {
+    this.recover = AI.whirlRecover;
+    this.whirlWindup = 0;
+    this.intent = 'chase';
+
+    const cx = this.whirlX;
+    const cy = this.whirlY;
+    for (let i = 0; i < store.activeCount; i += 1) {
+      const slot = store.active[i];
+      if (slot === undefined) continue;
+      const r = store.radius[slot] ?? 0;
+      if (distance(cx, cy, store.x[slot] ?? 0, store.y[slot] ?? 0) > AI.whirlRadius + r) continue;
+
+      const dmg = Math.max(1, this.atk * AI.whirlDamageMul - (store.armor[slot] ?? 0));
+      hooks.hitMonster(slot, dmg, false);
+      if (this.lifesteal > 0) this.hp = Math.min(this.maxHp, this.hp + dmg * this.lifesteal);
+    }
+  }
+
+  private countQiTargets(store: MonsterStore): number {    if (this.target < 0) return 0;
     const dir = normalize((store.x[this.target] ?? this.x) - this.x, (store.y[this.target] ?? this.y) - this.y);
     let count = 0;
     for (let i = 0; i < store.activeCount; i += 1) {

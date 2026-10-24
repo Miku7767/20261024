@@ -54,6 +54,11 @@ async function bootstrap(): Promise<void> {
       scene.fx.slash(x, y, dirX, dirY, AI.qiLength, AI.qiHalfWidth * 2);
       audio.onQi();
     },
+    onWhirl: (x, y, radius, windup) => {
+      // 预警圈形状 = 判定形状（正圆），且不缩放只递增亮度：缩放会让玩家误判范围
+      scene.fx.telegraph(x, y, radius, windup);
+      audio.onQi();
+    },
     onRangedShot: (_slot, fromX, fromY, toX, toY) => {
       // 只画"飞在半路的一段"：全长实线会被看成一根绑在勇者身上的白绳，
       // 短促的斜光带才像弹道。

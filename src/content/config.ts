@@ -82,8 +82,20 @@ export const POWERUP = { interval: 30, slowScale: 0.15 } as const;
 /** 经验：XP_need(L) = base + per × (L − 1)；击杀所得 = 星级 × perStar。 */
 export const XP = { base: 60, per: 45, perStar: 8 } as const;
 
-/** 引爆。 */
-export const DETONATE = { radius: 110, perStar: 30, cd: 2, hungerPerUse: 0.04, hungerMax: 10 } as const;
+/**
+ * 引爆：自残手段，不是输出手段。
+ *
+ * 清掉半径内所有自家魔物（断送经验）+ 给勇者叠饥渴（攻速），
+ * 对勇者只有 `heroPerStar` 的附带伤害 —— 刻意压到"打不死人"的量级，
+ * 否则玩家会去刷引爆当输出，反向肉鸽的取舍就塌了。
+ */
+export const DETONATE = {
+  radius: 110,
+  heroPerStar: 8,
+  cd: 2,
+  hungerPerUse: 0.04,
+  hungerMax: 10,
+} as const;
 
 /** 击杀奖励（评分用）。 */
 export const SCORE = { perSecondLeft: 12, perPeakStar: 50, perKill: 4 } as const;

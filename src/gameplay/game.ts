@@ -15,7 +15,7 @@ import {
   starCapAt,
 } from '../content/config';
 import { CARDS, STARTER_HAND, cardCdSeconds, findCard, summonCount } from '../content/cards';
-import { MonsterStore } from '../ecs/store';
+import { MAX_MONSTERS, MonsterStore } from '../ecs/store';
 import { Hero, type HeroHooks } from './hero';
 import { updateMonsters } from './monsters';
 import { createRng, type Rng } from '../core/rng';
@@ -73,6 +73,8 @@ export interface GameEvents {
   onHeroLevel(level: number, passive: string): void;
   onSwing(): void;
   onQi(x: number, y: number, dirX: number, dirY: number): void;
+  /** 旋风斩起手。windup 是前摇时长，渲染层据此画地面预警圈。 */
+  onWhirl(x: number, y: number, radius: number, windup: number): void;
   onRangedShot(slot: number, fromX: number, fromY: number, toX: number, toY: number): void;
   onDetonate(x: number, y: number, radius: number): void;
   /** 地面预警圈（火球/自爆），duration 秒后结算 */
@@ -452,22 +454,38 @@ export class Game {
     const star = this.store.star[slot] ?? 1;
     const mx = this.store.x[slot] ?? 0;
     const my = this.store.y[slot] ?? 0;
-    const damage = star * DETONATE.perStar;
 
-    // 爆炸范围直接砸在勇者身上：这是"止损"而不是"输出"
-    if (distance(mx, my, this.hero.x, this.hero.y) <= DETONATE.radius) {
-      this.hero.takeDamage(damage, this.heroHooks);
+    // 引爆是自残，不是输出：把点中的那只连同半径内**所有自家魔物**一起清掉。
+    // 它们全部走 byHero=false 的死亡路径，所以一颗经验都不给 —— 这正是引爆的用途：
+    // 宁可自己少赚经验，也不让锅巴继续滚雪球。
+    //
+    // 遍历 alive[] 而不是 active[]：killMonster 内部会 refreshActive() 重排 active，
+    // 边遍历边重排会漏掉一半。alive[] 被 kill 置 0，天然不会重复访问。
+    let destroyed = 0;
+    for (let i = 0; i < MAX_MONSTERS; i += 1) {
+      if (this.store.alive[i] !== 1) continue;
+      const ox = this.store.x[i] ?? 0;
+      const oy = this.store.y[i] ?? 0;
+      if (distance(mx, my, ox, oy) > DETONATE.radius) continue;
+      this.killMonster(i, false);
+      destroyed += 1;
     }
 
-    this.store.kill(slot);
-    this.store.refreshActive();
+    // 对锅巴只有一点附带伤害。刻意压低：如果这里能打死他，引爆就变成了"输出手段"，
+    // 玩家会去刷引爆而不是忍着用，整个反向肉鸽的取舍就塌了。
+    if (distance(mx, my, this.hero.x, this.hero.y) <= DETONATE.radius) {
+      this.hero.takeDamage(star * DETONATE.heroPerStar, this.heroHooks);
+    }
+
     this.detonations += 1;
     this.detonateCd = DETONATE.cd;
     this.hero.hunger = Math.min(DETONATE.hungerMax, this.hero.hunger + 1);
     this.events.onDetonate(mx, my, DETONATE.radius);
-    this.events.onDeath(slot);
-    // 代价必须说清楚：炸掉的那只不再给经验，而痛觉换来的是勇者的攻速
-    this.events.toast(`引爆 ★${star}：经验阻断 · 他的攻速 +${Math.round(this.hero.hunger * DETONATE.hungerPerUse * 100)}%`, 'good');
+    // 代价必须说清楚：炸掉的不再给经验，而痛觉换来的是勇者的攻速
+    this.events.toast(
+      `引爆 ★${star}：${destroyed} 只清场 · 经验阻断 · 他的攻速 +${Math.round(this.hero.hunger * DETONATE.hungerPerUse * 100)}%`,
+      'good',
+    );
     return true;
   }
 
@@ -579,6 +597,7 @@ export class Game {
       if (hp <= 0) this.killMonster(slot, true);
     },
     onQi: (x, y, dirX, dirY) => this.events.onQi(x, y, dirX, dirY),
+    onWhirl: (x, y, radius, windup) => this.events.onWhirl(x, y, radius, windup),
     onSwing: () => this.events.onSwing(),
     onLevelUp: (level, passive) => {
       this.events.onHeroLevel(level, passive);

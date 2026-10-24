@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 勇者 AI 的全部可调参数。
  *
  * 只改这里、不改 `gameplay/hero.ts` 的逻辑，就能整体调手感 ——
@@ -30,6 +30,21 @@ export const AI = {
   qiHalfWidth: 28,
   qiMinTargets: 2,
   qiDamageMul: 1.4,
+
+  /**
+   * 旋风斩：被围住时的解围技，不是常规输出。
+   *
+   * 触发门槛刻意定得很高（要 5 个以上贴身），因为它一旦放出来就是无死角清场，
+   * 门槛低了会让"用数量淹没他"这条主策略彻底失效 —— 实测门槛 3 时，
+   * 机器人把怪堆在他身边反而送人头，剩余血量比从 27% 涨到 59%。
+   * 它应该是"被围到危险时才救一次"，而不是"每 7 秒清一次场"。
+   */
+  whirlCd: 9,
+  whirlWindup: 0.25,
+  whirlRecover: 0.35,
+  whirlRadius: 96,
+  whirlMinTargets: 5,
+  whirlDamageMul: 0.85,
 
   /** 移动 */
   accelK: 12,
