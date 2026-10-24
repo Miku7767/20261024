@@ -268,11 +268,19 @@ node tools/art/pack.py
 
 赛事要求（对照 [游戏赛道](https://1024.waytoagi.com/tracks/game)）：
 
-- [ ] **浏览器/手机可直接玩的链接** —— 待部署（需要联网推送，本机沙箱做不了）。
-      产物已确认可直接丢到任意静态托管的**子路径**：`vite.config.ts` 用 `base: './'`，
-      `dist/index.html` 里全是 `./assets/...` 相对路径。已用 `/20261024/` 前缀模拟
-      GitHub Pages 实测：canvas/开始按钮/游戏实例全部正常，**0 个 404、0 个页面错误**，
-      点开始后 `state=playing, timeLeft=299`。所以 `dist/` 原样上传即可，不用改配置。
+- [ ] **浏览器/手机可直接玩的链接** —— 差最后一步：在仓库 Settings → Pages → Source
+      选 **GitHub Actions**，然后推任意提交，`.github/workflows/deploy-pages.yml` 会自动
+      构建并发布。拿到 `https://<用户名>.github.io/20261024/` 后填到这里。
+
+      **为什么必须走 CI**：`dist/` 被 `.gitignore` 忽略（本项目禁止提交构建产物），
+      而根目录 `index.html` 引用的是未编译的 `<script src="/src/main.ts">`，
+      所以「Pages 直接发布仓库根目录」会白屏。CI 在云端跑一次 `npm run build`
+      再把 `dist/` 作为 Pages 产物上传，才能拿到能玩的页面。
+
+      产物本身已验证可部署到子路径：`vite.config.ts` 用 `base: './'`，`dist/index.html`
+      里全是 `./assets/...` 相对路径。用 `/20261024/` 前缀模拟 GitHub Pages 实测：
+      canvas / 开始按钮 / 游戏实例全部正常，**0 个 404、0 个页面错误**，
+      点开始后 `state=playing, timeLeft=299`。
 - [x] **从开始到重开能完整玩一局** —— 实机验证：标题页 →「开始」→ 游玩（倒计时/血条/星数/手牌正常）
       → 结算面板（得分 826 / 锅巴 Lv.3 / 击杀 19 / 峰值星数 15 / 引爆 0）→「再来一局」→ `state=playing, timeLeft=299`
 - [x] **操作提示在游戏内** —— 常驻提示条「点卡 → 点地面召唤 · 双击魔物引爆」；标题页含

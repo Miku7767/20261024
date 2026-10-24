@@ -1,0 +1,62 @@
+name: Deploy to GitHub Pages
+
+# 为什么需要这个文件：
+# GitHub Pages 只能发布仓库里已有的文件，而本项目的产物在 dist/ 且被 .gitignore 忽略
+# （AGENTS.md 明确禁止提交 dist/）。根目录的 index.html 引用的是未编译的
+# <script src="/src/main.ts">，直接开 Pages 会白屏。
+# 所以用 CI 在云端跑一次 build，把 dist/ 作为 Pages 产物发布。
+#
+# 用法：仓库 Settings → Pages → Source 选 "GitHub Actions"，然后推任意提交即可。
+
+on:
+  push:
+    branches:
+      - miku-on-remote
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 同一时间只允许一个部署；新的推送取消排队中的旧任务，但不打断正在发布的
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      # 用 ci 而不是 install：锁文件存在时必须可复现，装出别的版本会掩盖问题
+      - run: npm ci
+
+      # build 脚本本身含 tsc --noEmit，构建失败就等于类型检查失败，不会发布坏产物
+      - run: npm run build
+
+      # 冒烟测试跑在 CI 里没有意义（需要 Edge + swiftshader），单测有
+      - run: npm test
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
