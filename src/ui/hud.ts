@@ -70,6 +70,7 @@ export class Hud {
         <div class="hand" data-hand></div>
       </div>
       <button class="btn-pause" data-pause title="暂停 (Space)">❚❚</button>
+      <div class="rotate-hint">↻ 横过来玩，画面更大</div>
       <div class="toasts" data-toasts></div>
       <div class="overlay" data-overlay></div>
     `;
