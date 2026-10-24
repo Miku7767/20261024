@@ -268,12 +268,25 @@ node tools/art/pack.py
 
 赛事要求（对照 [游戏赛道](https://1024.waytoagi.com/tracks/game)）：
 
-- [ ] **浏览器/手机可直接玩的链接**
-- [ ] **从开始到重开能完整玩一局**
-- [ ] **操作提示在游戏内**（不是文档里）
-- [ ] **主角卡 1 张**：一句话/草图 + 生成的角色 + 游戏里的样子
-- [ ] 角色与道具为 AI 生成（保留 `tools/media/manifest.json` 作为凭证）
+- [ ] **浏览器/手机可直接玩的链接** —— 待部署（需要联网推送 + 静态托管，本机沙箱做不了）
+- [x] **从开始到重开能完整玩一局** —— 实机验证：标题页 →「开始」→ 游玩（倒计时/血条/星数/手牌正常）
+      → 结算面板（得分 826 / 锅巴 Lv.3 / 击杀 19 / 峰值星数 15 / 引爆 0）→「再来一局」→ `state=playing, timeLeft=299`
+- [x] **操作提示在游戏内** —— 常驻提示条「点卡 → 点地面召唤 · 双击魔物引爆」；标题页含
+      「空格暂停」；暂停按钮 `title="暂停 (Space)"` 与 `keydown` 里的 `Space` 一致；
+      结算面板显示引爆次数
+- [x] **主角卡 1 张**：一句话/草图 + 生成的角色 + 游戏里的样子 —— 见 [`docs/CHARACTER_CARD.md`](docs/CHARACTER_CARD.md)
+- [x] 角色与道具为 AI 生成（保留 `tools/media/manifest.json` 作为凭证）—— 15 张贴图在 `public/art/`，
+      `manifest.json` 记录每张的提示词与参数
 - [ ] 提交截止：**2026-10-25 16:00**
+
+> 验证方式（2026-10-24）：`npx tsc --noEmit` 0 错误 · `npm test` 20/20 · `npm run build` 通过 ·
+> `node tools/smoke.mjs` SMOKE PASS（16/16，无 console/网络错误）· `npm run sim 30` 胜率 43%、
+> 0 次 Lv15 判负、17 局失败全部为 300 秒超时。
+>
+> ⚠️ 写自动化脚本注意：这个游戏**只有 `Space` / `Escape` / `F3` 三个快捷键**
+> （`main.ts` 的 `keydown`）。选卡必须点手牌按钮 `[data-hand] > button`，
+> 关权能面板必须点选项 `[data-opt]`。用 `keyboard.press('Digit1')` 是无效操作，
+> 会让权能面板一直挂着、世界被暂停，后续所有点击都落在蒙层上。
 
 ---
 
